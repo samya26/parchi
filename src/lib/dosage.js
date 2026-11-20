@@ -14,6 +14,7 @@ export function decodeDosage(raw = '', durationRaw = '', foodRaw = '') {
   const text = `${raw} ${durationRaw} ${foodRaw}`.trim();
   const t = ` ${text.toLowerCase().replace(/[–—]/g, '-')} `;
   const why = [];
+  let m;
   const res = { slots: { morning: 0, afternoon: 0, night: 0 }, asNeeded: false, food: null, days: null, once: false, why };
 
   // 1) Number pattern: 1-0-1 or 1-1-1-1 (morning-afternoon-(evening)-night)
@@ -26,6 +27,11 @@ export function decodeDosage(raw = '', durationRaw = '', foodRaw = '') {
       res.slots = { morning: parts[0], afternoon: parts[1], night: parts[2] };
     }
     why.push(`"${pat[0].trim()}" = ${parts.length === 4 ? 'morning – afternoon – evening – night' : 'morning – afternoon – night'}`);
+  } else if ((m = t.match(/\(?\s*\b([man])\b\s*\)?\s*-\s*\(?\s*\b([man])\b\s*\)?(?:\s*-\s*\(?\s*\b([man])\b\s*\)?)?/))) {
+    // Letter style: (M) - (N) = morning and night, M-A-N = morning, afternoon, night
+    const map = { m: 'morning', a: 'afternoon', n: 'night' };
+    m.slice(1).filter(Boolean).forEach((l) => { res.slots[map[l]] = 1; });
+    why.push(`"${m[0].trim()}" = M = morning, A = afternoon, N = night`);
   } else {
     // 2) Latin/Indian shorthand
     const rules = [
@@ -45,10 +51,10 @@ export function decodeDosage(raw = '', durationRaw = '', foodRaw = '') {
   if (/\bstat\b/.test(t)) { res.once = true; why.push('STAT = take one dose immediately'); }
 
   // 3) Food timing
-  if (/\b(ac|a\.c|before food|before meal|before breakfast|empty stomach|khali pet|khaali pet)\b/.test(t)) {
-    res.food = 'before'; why.push('AC = before food');
-  } else if (/\b(pc|p\.c|after food|after meal|after breakfast|khane ke baad)\b/.test(t)) {
-    res.food = 'after'; why.push('PC = after food');
+  if (/\b(ac|a\.c|b\/f|bf|before food|before meal|before breakfast|empty stomach|khali pet|khaali pet)\b/.test(t)) {
+    res.food = 'before'; why.push('AC / B/F = before food');
+  } else if (/\b(pc|p\.c|a\/f|af|after food|after meal|after breakfast|khane ke baad)\b/.test(t)) {
+    res.food = 'after'; why.push('PC / A/F = after food');
   } else if (/\b(with food|with meal)\b/.test(t)) res.food = 'with';
 
   // 4) Duration
@@ -76,6 +82,7 @@ export function plainLanguage(dec, form, amount) {
   const [one, many] = unitWord(form);
   const taken = SLOT_NAMES.filter((s) => dec.slots[s] > 0);
   const what = amount || '';
+  const topical = /^(cream|gel|ointment|lotion)/.test(form || '');
   const parts = taken.map((s) => {
     const n = dec.slots[s];
     const unit = what ? what : `${word(n)} ${n > 1 ? many : one}`;
@@ -84,7 +91,10 @@ export function plainLanguage(dec, form, amount) {
   });
   let s = '';
   if (dec.once) s = `Take one dose right away`;
-  else if (parts.length) s = 'Take ' + (parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts.at(-1) : parts[0]);
+  else if (topical && taken.length) {
+    const whens = taken.map((x) => (x === 'morning' ? 'in the morning' : x === 'afternoon' ? 'in the afternoon' : 'at night'));
+    s = 'Apply on the affected area ' + (whens.length > 1 ? whens.slice(0, -1).join(', ') + ' and ' + whens.at(-1) : whens[0]);
+  } else if (parts.length) s = 'Take ' + (parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts.at(-1) : parts[0]);
   if (dec.asNeeded) s = s ? `${s} — only when needed` : 'Take only when needed (e.g. for fever or pain)';
   if (!s) s = 'Ask your pharmacist how often to take this';
   if (dec.food === 'before') s += ', before food';

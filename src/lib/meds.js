@@ -1,5 +1,5 @@
 // Medicine lookup over the sharded dataset in /data (built by scripts/build_data.py).
-const base = import.meta.env.BASE_URL + 'data/';
+const base = (import.meta.env?.BASE_URL ?? '/') + 'data/';
 const cache = new Map();
 async function get(path) {
   if (!cache.has(path)) cache.set(path, fetch(base + path).then((r) => { if (!r.ok) throw new Error(path); return r.json(); }));
@@ -26,26 +26,35 @@ function dice(a, b) {
 }
 
 // Fuzzy search: handles small OCR mistakes ("Augmentine 625", "pan40", "montair-lc").
+const FORM_WORDS = /\b(tab|tabs|tablet|tablets|cap|caps|capsule|syp|syrup|susp|inj|injection|oint|ointment|cream|gel|drops?|t\.)\b\.?/g;
+const cleanQuery = (q) => q.toLowerCase().replace(FORM_WORDS, ' ').replace(/(\d+(?:\.\d+)?)\s*(mg|mcg|ml|gm|g|%)\b/g, '$1').replace(/\s+/g, ' ').trim();
+
+// Fuzzy search: handles small OCR mistakes ("Augmentine 625mg", "pan40", "montair-lc").
 export async function searchMedicine(query, limit = 5) {
-  const q = norm(query);
+  const cq = cleanQuery(query);
+  const q = norm(cq);
   if (!q) return [];
   const first = /[a-z]/.test(q[0]) ? q[0] : '0';
   let shard;
   try { shard = await get(`names/${first}.json`); } catch (e) { return []; }
-  const qWords = words(query);
-  const qNums = qWords.filter((w) => /\d/.test(w));
+  const qWords = words(cq);
+  const brand = qWords.find((w) => /[a-z]/.test(w)) || '';
+  const qNums = cq.match(/\d+(?:\.\d+)?/g) || [];
   const scored = [];
   for (const [name, gid, idx] of shard) {
     const n = norm(name);
+    const nWords = words(name);
     let s = dice(q, n.slice(0, q.length + 6));
     if (n.startsWith(q)) s += 0.35;
-    // numbers (strengths like 625, 40) must agree
+    // the brand word matters most ("Augmentin" must beat "Augumed")
+    const bw = nWords[0] || '';
+    const b = dice(brand, bw);
+    s += b >= 0.99 ? 0.45 : b >= 0.8 ? 0.2 : 0;
+    // strengths like 625 / 40 must agree
     if (qNums.length) {
-      const nWords = words(name);
-      const ok = qNums.every((x) => nWords.some((w) => w.includes(x)));
+      const ok = qNums.every((x) => nWords.some((w) => w === x || w.startsWith(x)));
       s += ok ? 0.15 : -0.3;
     }
-    if (/discontinued/i.test(name)) s -= 0.1;
     if (s > 0.45) scored.push({ name, gid, idx, score: s });
   }
   scored.sort((a, b) => b.score - a.score || a.name.length - b.name.length);
