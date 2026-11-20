@@ -4,7 +4,7 @@ import { getAlternatives } from '../lib/meds.js';
 import { buildEvents, googleLink, icsFile, SLOT_LABEL } from '../lib/calendar.js';
 
 const ICON = { morning: '🌅', afternoon: '☀️', night: '🌙' };
-const inr = (n) => '₹' + (n >= 100 ? Math.round(n).toLocaleString('en-IN') : n.toFixed(2).replace(/\.00$/, ''));
+const inr = (n) => (typeof n !== 'number' || !isFinite(n) ? '—' : '₹' + (n >= 100 ? Math.round(n).toLocaleString('en-IN') : n.toFixed(2).replace(/\.00$/, '')));
 
 function enrich(m) {
   const dec = decodeDosage(m.dosage, m.duration, m.food === 'before' ? 'AC' : m.food === 'after' ? 'PC' : '');
@@ -16,9 +16,18 @@ function enrich(m) {
 
 function Savings({ med }) {
   const [alt, setAlt] = useState(null);
-  useEffect(() => { if (med.product) getAlternatives(med.product.gid, med.product.idx, 4).then(setAlt); }, [med.product]);
+  useEffect(() => { if (med.product) getAlternatives(med.product.gid, med.product.idx, 4).then(setAlt).catch(() => setAlt({ failed: true })); }, [med.product]);
   if (!med.product) return null;
+  if (alt?.failed) return null;
   if (!alt) return <div className="alt loading">Finding same-salt alternatives…</div>;
+  if (!alt.mine.unitPrice) {
+    return (
+      <div className="alt">
+        <div className="alt-head"><div><b>{med.name}</b><small>{alt.composition} · {alt.total} brands with this exact salt & form</small></div><div className="mine">{inr(alt.mine.price)}<small>per pack</small></div></div>
+        <p className="hint">We can't compare prices fairly for this pack size yet — ask your pharmacist for a cheaper brand with the same salt.</p>
+      </div>
+    );
+  }
   const unit = alt.mine.unitType === 'unit' ? unitWord(alt.form)[0] : alt.mine.unitType;
   const units = alt.mine.unitType === 'unit' && med.dec.days && med.perDay ? med.perDay * med.dec.days : null;
   const trusted = alt.trusted.filter((x) => x.unitPrice < alt.mine.unitPrice);

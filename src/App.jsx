@@ -1,4 +1,21 @@
-import { useState } from 'react';
+import { Component, useState } from 'react';
+
+// If any screen crashes, show a friendly recovery card instead of a blank page.
+class Safe extends Component {
+  state = { err: null };
+  static getDerivedStateFromError(err) { return { err }; }
+  componentDidCatch(err) { console.error(err); }
+  render() {
+    if (!this.state.err) return this.props.children;
+    return (
+      <div className="error" style={{ marginTop: 24 }}>
+        <p><b>Something went wrong on this screen.</b> Your scan is safe — go back and try again.</p>
+        <p className="detail">Details (for fixing): {String(this.state.err.message || this.state.err)}</p>
+        <button className="primary" onClick={() => { this.setState({ err: null }); this.props.onBack(); }}>Go back</button>
+      </div>
+    );
+  }
+}
 import Home from './components/Home.jsx';
 import Reading from './components/Reading.jsx';
 import Confirm from './components/Confirm.jsx';
@@ -39,9 +56,13 @@ export default function App() {
           <Reading image={image} preset={reading} onDone={(r) => { setReading(r); setStep('confirm'); }} onBack={restart} />
         )}
         {step === 'confirm' && (
-          <Confirm image={image} reading={reading} onDone={(m) => { setMeds(m); setStep('plan'); window.scrollTo(0, 0); }} onBack={restart} />
+          <Safe key="confirm" onBack={restart}><Confirm image={image} reading={reading} onDone={(m) => { setMeds(m); setStep('plan'); window.scrollTo(0, 0); }} onBack={restart} /></Safe>
         )}
-        {step === 'plan' && <Plan meds={meds} advice={reading?.advice || []} onEdit={() => setStep('confirm')} onRestart={restart} />}
+        {step === 'plan' && (
+          <Safe key="plan" onBack={() => setStep('confirm')}>
+            <Plan meds={meds} advice={reading?.advice || []} onEdit={() => setStep('confirm')} onRestart={restart} />
+          </Safe>
+        )}
       </main>
 
       <footer className="foot">
