@@ -14,13 +14,16 @@ export const isPreview = () => /claude|usercontent|localhost|127\.0\.0\.1/.test(
 
 export async function readPrescription(dataUrl) {
   const image = dataUrl.split(',')[1];
-  let r, text;
-  try {
-    r = await fetch('/api/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, mime: 'image/jpeg', hint: (() => { try { return localStorage.getItem('parchi-model'); } catch (e) { return null; } })() }) });
-    text = await r.text();
-  } catch (e) {
-    const err = new Error(`Network error: ${e.message}`); err.kind = 'network'; throw err;
+  const hint = (() => { try { return localStorage.getItem('parchi-model'); } catch (e) { return null; } })();
+  let r, text, lastErr;
+  // Mobile networks drop long requests sometimes — retry once automatically.
+  for (let attempt = 0; attempt < 2 && !r; attempt++) {
+    try {
+      r = await fetch('/api/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, mime: 'image/jpeg', hint }) });
+      text = await r.text();
+    } catch (e) { r = null; lastErr = e; }
   }
+  if (!r) { const err = new Error(`Network error: ${lastErr?.message || 'failed'}`); err.kind = 'network'; throw err; }
   let j = {};
   try { j = JSON.parse(text); } catch (e) { /* non-JSON (e.g. Vercel error page) */ }
   if (!r.ok) {

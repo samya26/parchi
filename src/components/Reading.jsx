@@ -19,7 +19,9 @@ export default function Reading({ image, preset, onDone, onBack }) {
         if (isPreview() && e.kind !== 'server') {
           setError({ msg: 'Live reading needs the deployed app (it calls the AI from a server). In this preview, try a sample prescription or type the medicines instead.' });
         } else {
-          setError({ msg: 'Parchi couldn’t read this one. Try again with a sharper, well-lit photo — or type the medicines instead.', detail: e.message });
+          setError({ msg: e.kind === 'network'
+            ? 'The connection dropped while Parchi was reading. Check your internet (Wi-Fi works best), keep the screen open, and try again.'
+            : 'Parchi couldn’t read this one. Try again with a sharper, well-lit photo — or type the medicines instead.', detail: e.message });
         }
       }
     })();
@@ -33,7 +35,10 @@ export default function Reading({ image, preset, onDone, onBack }) {
         {!error && <div className="beam" />}
       </div>
       {!error ? (
-        <p className="status"><span className="dot" />{LINES[msg]}</p>
+        <>
+          <p className="status"><span className="dot" />{LINES[msg]}</p>
+          <p className="wait">Messy handwriting can take up to a minute. Keep this screen open.</p>
+        </>
       ) : (
         <div className="error">
           <p>{error.msg}</p>
