@@ -12,7 +12,7 @@ function num(s) {
 
 export function decodeDosage(raw = '', durationRaw = '', foodRaw = '') {
   const text = `${raw} ${durationRaw} ${foodRaw}`.trim();
-  const t = ` ${text.toLowerCase().replace(/[–—]/g, '-')} `;
+  const t = ` ${text.toLowerCase().replace(/[–—_]/g, '-').replace(/-{2,}/g, '-').replace(/\s*-\s*/g, '-')} `;
   const why = [];
   let m;
   const res = { slots: { morning: 0, afternoon: 0, night: 0 }, asNeeded: false, food: null, days: null, once: false, why };
@@ -58,7 +58,7 @@ export function decodeDosage(raw = '', durationRaw = '', foodRaw = '') {
   } else if (/\b(with food|with meal)\b/.test(t)) res.food = 'with';
 
   // 4) Duration
-  const d = t.match(/(?:x|×|for)?\s*(\d+)\s*(d\b|days?|din|dins?|w\b|wks?|weeks?|m\b|months?|mths?)/);
+  const d = t.match(/(?:x|×|for)?\s*(\d+)\s*(d\b|days?|din|dins?|w\b|wks?\b|weeks?|m\b|months?|mths?)/);
   if (d) {
     const n = parseInt(d[1], 10), u = d[2];
     res.days = u.startsWith('w') ? n * 7 : (u.startsWith('m') ? n * 30 : n);

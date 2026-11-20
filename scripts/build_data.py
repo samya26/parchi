@@ -25,7 +25,9 @@ def form_of(name, pack):
         if f in s: base = f if f != 'drop' else 'drops'; break
     # release type / variant changes how a medicine works - never mix them
     rel = sorted(set(REL.findall(str(name).lower())))
-    return base + ('-' + '-'.join(rel) if rel else '')
+    # where it's used matters too: eye drops are never an alternative for nasal drops
+    route = next((r for r, w in (('eye', r'\b(eye|ophthalmic)\b'), ('ear', r'\b(ear|otic)\b'), ('nasal', r'\b(nasal|nose)\b')) if re.search(w, s)), None)
+    return base + ('-' + '-'.join(rel) if rel else '') + ('@' + route if route else '')
 
 def units(pack):
     pack = str(pack).lower()

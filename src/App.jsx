@@ -39,13 +39,14 @@ export default function App() {
           <span className="slip">पर्ची</span><span className="word">Parchi</span>
         </button>
         {step !== 'home' && (
-          <ol className="steps">
-            {STEPS.map((s, i) => <li key={s} className={i < idx ? 'done' : i === idx ? 'on' : ''}><i>{i < idx ? '✓' : i + 1}</i>{s}</li>)}
-          </ol>
+          <div className="progress" aria-label={`Step ${idx + 1} of 3: ${STEPS[idx]}`}>
+            <span className="p-label">{STEPS[idx]}</span>
+            <span className="p-dots">{STEPS.map((x, i) => <i key={x} className={i <= idx ? 'on' : ''} />)}</span>
+          </div>
         )}
       </header>
 
-      <main>
+      <main key={step} className="page">
         {step === 'home' && (
           <Home
             onImage={(img, sample) => { setImage(img); setReading(sample || null); setStep('reading'); }}
@@ -66,7 +67,7 @@ export default function App() {
       </main>
 
       <footer className="foot">
-        Parchi helps you <b>understand</b> a prescription. It is not medical advice — always confirm medicines, doses and any switch to an alternative with your doctor or pharmacist.
+        Not medical advice — confirm with your doctor or pharmacist.
       </footer>
     </div>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { searchMedicine, getProduct } from '../lib/meds.js';
 import { decodeDosage, plainLanguage } from '../lib/dosage.js';
+import { useReveal } from '../lib/reveal.js';
 
 let uid = 0;
 const fromReading = (m) => ({
@@ -73,7 +74,7 @@ function MedCard({ med, image, onChange, onRemove }) {
   const title = med.product?.name || med.query || 'New medicine';
 
   return (
-    <article className={`med ${problems.length ? 'attn' : 'fine'}`}>
+    <article className={`med rv ${problems.length ? 'attn' : 'fine'}`}>
       <Crop image={image} box={med.box} />
 
       {!open ? (
@@ -83,7 +84,7 @@ function MedCard({ med, image, onChange, onRemove }) {
             <span className="tick">✓</span>
           </div>
           <p className="plain">{plainLanguage(dec, med.product?.form || med.form, med.amount)}</p>
-          <button className="edit-link" onClick={() => setOpen(true)}>Something wrong? Edit</button>
+          <button className="edit-link" onClick={() => setOpen(true)}>Edit</button>
         </div>
       ) : (
         <>
@@ -138,22 +139,23 @@ export default function Confirm({ image, reading, onDone, onBack }) {
   const update = (m) => setMeds((all) => all.map((x) => (x.id === m.id ? m : x)));
   const loading = meds.some((m) => m.candidates === null);
   const flagged = meds.filter((m) => issues(m).length && !m.edited).length;
+  useReveal([meds.length]);
 
   return (
     <section className="confirm">
       <div className="sec-head">
-        <h2>Parchi found {meds.length} medicine{meds.length !== 1 ? 's' : ''}</h2>
-        <p>Glance at each one next to the doctor's handwriting. If it all looks right, just tap the button below — you only need to fix what's wrong.</p>
+        <h2>Found {meds.length} medicine{meds.length !== 1 ? 's' : ''}</h2>
+        <p>Quick check against the handwriting. Fix only what's wrong.</p>
       </div>
       {meds.map((m) => (
         <MedCard key={m.id} med={m} image={image} onChange={update} onRemove={() => setMeds((all) => all.filter((x) => x.id !== m.id))} />
       ))}
-      <button className="add" onClick={() => setMeds((all) => [...all, fromReading({})])}>+ Add a medicine Parchi missed</button>
+      <button className="add" onClick={() => setMeds((all) => [...all, fromReading({})])}>+ Add a missed medicine</button>
 
       <div className="sticky-cta">
         <button className="ghost" onClick={onBack}>Start over</button>
         <button className="primary big" disabled={!meds.length || loading || flagged > 0} onClick={() => onDone(meds)}>
-          {loading ? 'Matching medicines…' : flagged ? `Check ${flagged} highlighted` : 'All correct — build my plan →'}
+          {loading ? 'Matching…' : flagged ? `Check ${flagged} highlighted` : 'Looks right →'}
         </button>
       </div>
     </section>
