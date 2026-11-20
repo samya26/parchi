@@ -98,7 +98,8 @@ export default async function handler(req, res) {
     const first = cachedModel || process.env.GEMINI_MODEL || 'gemini-flash-latest';
     let candidates = [first];
     let model, r, j, tried = [];
-    for (let i = 0; i < 5 && i < candidates.length; i++) {
+    const t0 = Date.now();
+    for (let i = 0; i < 5 && i < candidates.length && Date.now() - t0 < 40000; i++) {
       model = candidates[i];
       tried.push(model);
       r = await generate(key, model, image, mime);

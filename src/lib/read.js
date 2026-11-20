@@ -1,5 +1,5 @@
 // Sends the photo to /api/read (Gemini, server-side) — or returns the stored reading for demo samples.
-export async function shrink(file, max = 1600) {
+export async function shrink(file, max = 1400) {
   const url = typeof file === 'string' ? file : URL.createObjectURL(file);
   const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
   const k = Math.min(1, max / Math.max(img.width, img.height));
