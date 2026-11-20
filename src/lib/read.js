@@ -16,7 +16,7 @@ export async function readPrescription(dataUrl) {
   const image = dataUrl.split(',')[1];
   let r, text;
   try {
-    r = await fetch('/api/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, mime: 'image/jpeg' }) });
+    r = await fetch('/api/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, mime: 'image/jpeg', hint: (() => { try { return localStorage.getItem('parchi-model'); } catch (e) { return null; } })() }) });
     text = await r.text();
   } catch (e) {
     const err = new Error(`Network error: ${e.message}`); err.kind = 'network'; throw err;
@@ -28,5 +28,6 @@ export async function readPrescription(dataUrl) {
     err.kind = r.status === 404 ? 'missing-api' : 'server';
     throw err;
   }
+  try { if (j.model) localStorage.setItem('parchi-model', j.model); } catch (e) {}
   return j;
 }

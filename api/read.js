@@ -58,15 +58,37 @@ async function listFlashModels(key) {
   return names.sort((a, b) => rank(a) - rank(b) || ver(b) - ver(a));
 }
 
-async function generate(key, model, image, mime) {
-  return fetch(`${API}/models/${model}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-    body: JSON.stringify({
-      contents: [{ parts: [{ inline_data: { mime_type: mime || 'image/jpeg', data: image } }, { text: PROMPT }] }],
-      generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: SCHEMA },
-    }),
-  });
+// Reading a prescription doesn't need long "thinking" — keep it low so it finishes fast.
+function thinkingFor(model) {
+  if (/gemini-2\.5/.test(model)) return { thinkingBudget: 0 };
+  if (/gemini-[3-9]/.test(model) || /latest/.test(model)) return { thinkingLevel: 'low' };
+  return null;
+}
+
+async function generate(key, model, image, mime, msLeft, withThinking = true) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), Math.max(3000, msLeft));
+  const thinking = withThinking ? thinkingFor(model) : null;
+  try {
+    const r = await fetch(`${API}/models/${model}:generateContent`, {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+      body: JSON.stringify({
+        contents: [{ parts: [{ inline_data: { mime_type: mime || 'image/jpeg', data: image } }, { text: PROMPT }] }],
+        generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: SCHEMA, ...(thinking ? { thinkingConfig: thinking } : {}) },
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    // Some models reject a thinking setting — retry once without it.
+    if (r.status === 400 && thinking && /thinking/i.test(j.error?.message || '')) return generate(key, model, image, mime, msLeft, false);
+    return { r, j };
+  } catch (e) {
+    if (e.name === 'AbortError') return { r: { ok: false, status: 504 }, j: { error: { message: `${model} took too long` } } };
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function parseJSON(text) {
@@ -89,21 +111,20 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   if (!key) return res.status(500).json({ error: 'Server is missing GEMINI_API_KEY (add it in Vercel settings, then redeploy).' });
 
-  const { image, mime } = req.body || {};
+  const { image, mime, hint } = req.body || {};
   if (!image) return res.status(400).json({ error: 'No image received' });
 
   try {
-    // Try the working/configured model first; if it's retired (404) or has no free quota (429),
-    // fall back through other current flash models.
-    const first = cachedModel || process.env.GEMINI_MODEL || 'gemini-flash-latest';
+    // Try the last model that worked (sent back by the browser), then the configured one;
+    // if retired (404) or without free quota (429), fall back through other current flash models.
+    const first = cachedModel || (typeof hint === 'string' && /^[\w.-]+$/.test(hint) ? hint : null) || process.env.GEMINI_MODEL || 'gemini-flash-latest';
     let candidates = [first];
     let model, r, j, tried = [];
-    const t0 = Date.now();
-    for (let i = 0; i < 5 && i < candidates.length && Date.now() - t0 < 40000; i++) {
+    const t0 = Date.now(), BUDGET = 54000;
+    for (let i = 0; i < 6 && i < candidates.length && Date.now() - t0 < BUDGET - 4000; i++) {
       model = candidates[i];
       tried.push(model);
-      r = await generate(key, model, image, mime);
-      j = await r.json().catch(() => ({}));
+      ({ r, j } = await generate(key, model, image, mime, BUDGET - (Date.now() - t0)));
       const retry = r.status === 404 || r.status === 429 || /not found|not supported/i.test(j.error?.message || '');
       if (!retry) break;
       if (candidates.length === 1) candidates = [first, ...(await listFlashModels(key)).filter((m) => m !== first)];
