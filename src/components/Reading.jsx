@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { readPrescription } from '../lib/read.js';
+import { readPrescription, isPreview } from '../lib/read.js';
 
 const LINES = ['Cleaning up the photo…', 'Finding each medicine line…', 'Reading the handwriting…', 'Decoding the doctor’s shorthand…'];
 
@@ -15,9 +15,12 @@ export default function Reading({ image, preset, onDone, onBack }) {
         const r = preset ? (await new Promise((res) => setTimeout(res, 3200)), preset) : await readPrescription(image);
         if (alive) onDone({ medicines: r.medicines || [], advice: r.advice || [] });
       } catch (e) {
-        if (alive) setError(e.message === 'offline' || /404|Unexpected/.test(e.message)
-          ? 'Live reading needs the deployed app (it calls the AI from a server). In this preview, try a sample prescription or type the medicines instead.'
-          : e.message);
+        if (!alive) return;
+        if (isPreview() && e.kind !== 'server') {
+          setError({ msg: 'Live reading needs the deployed app (it calls the AI from a server). In this preview, try a sample prescription or type the medicines instead.' });
+        } else {
+          setError({ msg: 'Parchi couldn’t read this one. Try again with a sharper, well-lit photo — or type the medicines instead.', detail: e.message });
+        }
       }
     })();
     return () => { alive = false; clearInterval(t); };
@@ -33,7 +36,8 @@ export default function Reading({ image, preset, onDone, onBack }) {
         <p className="status"><span className="dot" />{LINES[msg]}</p>
       ) : (
         <div className="error">
-          <p>{error}</p>
+          <p>{error.msg}</p>
+          {error.detail && <p className="detail">Details (for fixing): {error.detail}</p>}
           <button className="primary" onClick={onBack}>Back</button>
         </div>
       )}

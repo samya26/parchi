@@ -9,15 +9,24 @@ export async function shrink(file, max = 1600) {
   return c.toDataURL('image/jpeg', 0.88);
 }
 
+// True when running inside the claude.ai preview (no server there).
+export const isPreview = () => /claude|usercontent|localhost|127\.0\.0\.1/.test(location.hostname) && !location.port.startsWith('3');
+
 export async function readPrescription(dataUrl) {
   const image = dataUrl.split(',')[1];
-  let r;
+  let r, text;
   try {
     r = await fetch('/api/read', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image, mime: 'image/jpeg' }) });
+    text = await r.text();
   } catch (e) {
-    throw new Error('offline');
+    const err = new Error(`Network error: ${e.message}`); err.kind = 'network'; throw err;
   }
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || 'Could not read the prescription');
+  let j = {};
+  try { j = JSON.parse(text); } catch (e) { /* non-JSON (e.g. Vercel error page) */ }
+  if (!r.ok) {
+    const err = new Error(j.error || `Server ${r.status}: ${text.slice(0, 160)}`);
+    err.kind = r.status === 404 ? 'missing-api' : 'server';
+    throw err;
+  }
   return j;
 }

@@ -1,17 +1,20 @@
 // Vercel serverless function: sends the prescription photo to Gemini and returns structured JSON.
 // Set GEMINI_API_KEY in Vercel → Project → Settings → Environment Variables.
-// Optional: GEMINI_MODEL (defaults below — change it if Google renames models).
+// Optional: GEMINI_MODEL. If the model isn't available, we automatically pick a current "flash" model.
+// Health check: open /api/read in a browser (GET) to see if the key and model work.
 export const config = { maxDuration: 60 };
+
+const API = 'https://generativelanguage.googleapis.com/v1beta';
 
 const PROMPT = `You are reading a photo of an Indian doctor's prescription (it may be handwritten, messy, or partly printed).
 Extract ONLY the prescribed medicines. Do NOT return the patient's or doctor's name, phone, or any personal details.
 For each medicine return:
 - as_written: exactly what is written for the medicine line, as best you can read it
 - name: the most likely Indian brand or generic name, with strength (e.g. "Augmentin 625 Duo", "Pan 40", "Dolo 650")
-- form: tablet / capsule / syrup / injection / drops / cream / other (from "Tab", "Cap", "Syp", "Inj" etc.)
-- dosage_as_written: the dosage exactly as written (e.g. "1-0-1", "BD", "TDS", "5ml TDS", "SOS", "HS")
-- amount: amount per dose if not a whole tablet (e.g. "5 ml", "½ tab"), else ""
-- duration_as_written: e.g. "x 5 days", "1 week", "" if missing
+- form: tablet / capsule / syrup / injection / drops / cream / spray / other (from "Tab", "Cap", "Syp", "Inj" etc.)
+- dosage_as_written: the dosage exactly as written (e.g. "1-0-1", "BD", "TDS", "5ml TDS", "SOS", "HS", "1 puff - 1 puff")
+- amount: amount per dose if not a whole tablet (e.g. "5 ml", "½ tab", "1 puff"), else ""
+- duration_as_written: e.g. "x 5 days", "1 week", "15 days", "" if missing
 - food: "before" / "after" / "with" / "" (AC = before, PC = after)
 - confidence: 0 to 1, how sure you are about the medicine name
 - box_2d: [ymin, xmin, ymax, xmax] of that medicine line in the image, normalized 0-1000
@@ -39,26 +42,73 @@ const SCHEMA = {
   required: ['medicines'],
 };
 
+let cachedModel = null;
+
+async function listFlashModels(key) {
+  const r = await fetch(`${API}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } });
+  const j = await r.json();
+  if (!r.ok) throw new Error(`ListModels ${r.status}: ${j.error?.message || 'failed'}`);
+  return (j.models || [])
+    .filter((m) => m.supportedGenerationMethods?.includes('generateContent') && /flash/.test(m.name) && !/(lite|image|tts|live|audio|thinking-exp|preview-tts)/.test(m.name))
+    .map((m) => m.name.replace('models/', ''))
+    .sort()
+    .reverse();
+}
+
+async function generate(key, model, image, mime) {
+  return fetch(`${API}/models/${model}:generateContent`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      contents: [{ parts: [{ inline_data: { mime_type: mime || 'image/jpeg', data: image } }, { text: PROMPT }] }],
+      generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: SCHEMA },
+    }),
+  });
+}
+
+function parseJSON(text) {
+  const clean = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+  return JSON.parse(clean);
+}
+
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   const key = process.env.GEMINI_API_KEY;
-  if (!key) return res.status(500).json({ error: 'Server is missing GEMINI_API_KEY' });
+
+  if (req.method === 'GET') {
+    if (!key) return res.status(200).json({ ok: false, problem: 'GEMINI_API_KEY is not set in Vercel (Settings → Environment Variables), then redeploy.' });
+    try {
+      const models = await listFlashModels(key);
+      return res.status(200).json({ ok: true, configuredModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash', availableFlashModels: models.slice(0, 8) });
+    } catch (e) {
+      return res.status(200).json({ ok: false, problem: String(e.message || e) });
+    }
+  }
+  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+  if (!key) return res.status(500).json({ error: 'Server is missing GEMINI_API_KEY (add it in Vercel settings, then redeploy).' });
+
   const { image, mime } = req.body || {};
-  if (!image) return res.status(400).json({ error: 'No image' });
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  if (!image) return res.status(400).json({ error: 'No image received' });
+
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify({
-        contents: [{ parts: [{ inline_data: { mime_type: mime || 'image/jpeg', data: image } }, { text: PROMPT }] }],
-        generationConfig: { temperature: 0, responseMimeType: 'application/json', responseSchema: SCHEMA },
-      }),
-    });
-    const j = await r.json();
-    if (!r.ok) return res.status(502).json({ error: j.error?.message || 'Gemini error' });
-    const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') || '{}';
-    return res.status(200).json(JSON.parse(text));
+    let model = cachedModel || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+    let r = await generate(key, model, image, mime);
+    let j = await r.json().catch(() => ({}));
+
+    // Model renamed / retired → pick a current flash model automatically and retry once.
+    if (r.status === 404 || /not found|not supported/i.test(j.error?.message || '')) {
+      const models = await listFlashModels(key);
+      if (!models.length) throw new Error('No Gemini flash model available for this key');
+      model = models[0];
+      r = await generate(key, model, image, mime);
+      j = await r.json().catch(() => ({}));
+    }
+    if (!r.ok) return res.status(502).json({ error: `Gemini ${r.status}: ${j.error?.message || 'error'}`, model });
+    cachedModel = model;
+
+    const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
+    if (!text) return res.status(502).json({ error: `Gemini returned no text (${j.candidates?.[0]?.finishReason || j.promptFeedback?.blockReason || 'unknown'})`, model });
+    const out = parseJSON(text);
+    return res.status(200).json({ ...out, model });
   } catch (e) {
     return res.status(500).json({ error: String(e.message || e) });
   }
