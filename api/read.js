@@ -103,7 +103,7 @@ export default async function handler(req, res) {
     if (!key) return res.status(200).json({ ok: false, problem: 'GEMINI_API_KEY is not set in Vercel (Settings → Environment Variables), then redeploy.' });
     try {
       const models = await listFlashModels(key);
-      return res.status(200).json({ ok: true, configuredModel: process.env.GEMINI_MODEL || 'gemini-flash-latest', availableFlashModels: models.slice(0, 8) });
+      return res.status(200).json({ ok: true, configuredModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash', availableFlashModels: models.slice(0, 8) });
     } catch (e) {
       return res.status(200).json({ ok: false, problem: String(e.message || e) });
     }
@@ -117,8 +117,11 @@ export default async function handler(req, res) {
   try {
     // Try the last model that worked (sent back by the browser), then the configured one;
     // if retired (404) or without free quota (429), fall back through other current flash models.
-    const first = cachedModel || (typeof hint === 'string' && /^[\w.-]+$/.test(hint) ? hint : null) || process.env.GEMINI_MODEL || 'gemini-flash-latest';
-    let candidates = [first];
+    // Fast, reliable order for this key (checked via the /api/read health page):
+    // 2.5 Flash with thinking off is quick and reads handwriting well; newer ones are fallbacks.
+    const PREFERRED = ['gemini-2.5-flash', 'gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-flash-latest'];
+    const first = cachedModel || (typeof hint === 'string' && /^[\w.-]+$/.test(hint) ? hint : null) || process.env.GEMINI_MODEL || PREFERRED[0];
+    let candidates = [first, ...PREFERRED.filter((m) => m !== first)];
     let model, r, j, tried = [];
     const t0 = Date.now(), BUDGET = 54000;
     for (let i = 0; i < 6 && i < candidates.length && Date.now() - t0 < BUDGET - 4000; i++) {
@@ -127,7 +130,7 @@ export default async function handler(req, res) {
       ({ r, j } = await generate(key, model, image, mime, BUDGET - (Date.now() - t0)));
       const retry = r.status === 404 || r.status === 429 || /not found|not supported/i.test(j.error?.message || '');
       if (!retry) break;
-      if (candidates.length === 1) candidates = [first, ...(await listFlashModels(key)).filter((m) => m !== first)];
+      if (i === candidates.length - 1 && !candidates.listed) { const more = (await listFlashModels(key)).filter((m) => !candidates.includes(m)); candidates = [...candidates, ...more]; candidates.listed = true; }
     }
     if (!r.ok) return res.status(502).json({ error: `Gemini ${r.status}: ${(j.error?.message || 'error').slice(0, 300)}`, tried });
     cachedModel = model;
