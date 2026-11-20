@@ -1,0 +1,158 @@
+[
+ {
+  "id": "fever",
+  "title": "Fever & throat infection",
+  "image": "samples/fever.jpg",
+  "reading": {
+   "medicines": [
+    {
+     "name": "Augmentin 625 Duo",
+     "form": "tablet",
+     "dosage_as_written": "1-0-1",
+     "duration_as_written": "x 5d",
+     "food": "after",
+     "amount": "",
+     "confidence": 0.93,
+     "as_written": "Tab Augmentin 625 Duo   1-0-1  x 5d  PC",
+     "box_2d": [
+      296,
+      122,
+      347,
+      895
+     ]
+    },
+    {
+     "name": "Pan 40",
+     "form": "tablet",
+     "dosage_as_written": "1-0-0",
+     "duration_as_written": "x 5d",
+     "food": "before",
+     "amount": "",
+     "confidence": 0.9,
+     "as_written": "Tab Pan 40   1-0-0  x 5d  AC",
+     "box_2d": [
+      393,
+      140,
+      444,
+      701
+     ]
+    },
+    {
+     "name": "Montair LC",
+     "form": "tablet",
+     "dosage_as_written": "0-0-1",
+     "duration_as_written": "x 7 days",
+     "food": "",
+     "amount": "",
+     "confidence": 0.86,
+     "as_written": "Tab Montair LC   0-0-1  x 7 days",
+     "box_2d": [
+      484,
+      132,
+      534,
+      773
+     ]
+    },
+    {
+     "name": "Ascoril LS",
+     "form": "syrup",
+     "dosage_as_written": "TDS",
+     "duration_as_written": "x 5d",
+     "food": "",
+     "amount": "5 ml",
+     "confidence": 0.81,
+     "as_written": "Syp Ascoril LS   5ml  TDS  x 5d",
+     "box_2d": [
+      576,
+      136,
+      626,
+      727
+     ]
+    },
+    {
+     "name": "Dolo 650",
+     "form": "tablet",
+     "dosage_as_written": "SOS",
+     "duration_as_written": "",
+     "food": "",
+     "amount": "",
+     "confidence": 0.95,
+     "as_written": "Tab Dolo 650   SOS (fever > 100\u00b0F)",
+     "box_2d": [
+      665,
+      135,
+      716,
+      809
+     ]
+    }
+   ],
+   "advice": [
+    "Plenty of warm fluids",
+    "Rest for 3 days",
+    "Review after 5 days if fever persists"
+   ]
+  }
+ },
+ {
+  "id": "bp",
+  "title": "Diabetes & BP (monthly)",
+  "image": "samples/bp.jpg",
+  "reading": {
+   "medicines": [
+    {
+     "name": "Telma 40",
+     "form": "tablet",
+     "dosage_as_written": "1-0-0",
+     "duration_as_written": "x 1 month",
+     "food": "",
+     "amount": "",
+     "confidence": 0.92,
+     "as_written": "Tab Telma 40   1-0-0  x 1 month",
+     "box_2d": [
+      296,
+      126,
+      347,
+      743
+     ]
+    },
+    {
+     "name": "Glycomet GP 1",
+     "form": "tablet",
+     "dosage_as_written": "1-0-1",
+     "duration_as_written": "x 30d",
+     "food": "before",
+     "amount": "",
+     "confidence": 0.84,
+     "as_written": "Tab Glycomet GP 1   1-0-1  AC  x 30d",
+     "box_2d": [
+      387,
+      121,
+      438,
+      830
+     ]
+    },
+    {
+     "name": "Rosuvas 10",
+     "form": "tablet",
+     "dosage_as_written": "0-0-1 HS",
+     "duration_as_written": "x 30d",
+     "food": "",
+     "amount": "",
+     "confidence": 0.8,
+     "as_written": "Tab Rosuvas 10   0-0-1  HS  x 30d",
+     "box_2d": [
+      482,
+      135,
+      533,
+      788
+     ]
+    }
+   ],
+   "advice": [
+    "Walk 30 min daily",
+    "Check sugar fasting & PP weekly",
+    "Low salt diet"
+   ]
+  }
+ }
+]
