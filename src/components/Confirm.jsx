@@ -26,7 +26,7 @@ const decodeOf = (m) => decodeDosage(m.dosage, m.duration, m.food === 'before' ?
 export function issues(m) {
   const out = [];
   if (m.candidates === null) return out; // still matching
-  if (!m.product && !m.noMatch) out.push('Not found in the medicine list');
+  if (!m.product && !m.noMatch) out.push(m.candidates.length ? 'Not sure which medicine this is — pick one or choose “None of these”' : 'Not found in the medicine list');
   if (m.confidence != null && m.confidence < 0.6) out.push('Handwriting was hard to read');
   const d = decodeOf(m);
   if (!d.slots.morning && !d.slots.afternoon && !d.slots.night && !d.asNeeded && !d.once) out.push('Couldn’t work out how often to take it');
@@ -61,9 +61,10 @@ function MedCard({ med, image, onChange, onRemove }) {
 
   const search = async (q) => {
     const c = await searchMedicine(q, 4);
-    const prods = await Promise.all(c.map((x) => getProduct(x.gid, x.idx)));
-    const pref = med.form ? prods.findIndex((p) => p.form.startsWith(med.form.slice(0, 4))) : 0;
-    const best = prods[pref >= 0 ? pref : 0] || null;
+    const prods = await Promise.all(c.map((x) => getProduct(x.gid, x.idx).then((p) => ({ ...p, score: x.score }))));
+    // Only auto-pick when the match is strong AND the form agrees (never swap a tablet for an injection).
+    const formOk = (p) => !med.form || med.form === 'other' || p.form.startsWith(med.form.slice(0, 4));
+    const best = prods.find((p) => p.score >= 1.0 && formOk(p)) || null;
     onChange({ ...med, query: q, candidates: prods, product: best, noMatch: false });
   };
   useEffect(() => { if (med.candidates === null && med.query) search(med.query); else if (!med.query) onChange({ ...med, candidates: [] }); }, []);
