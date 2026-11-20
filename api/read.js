@@ -48,11 +48,14 @@ async function listFlashModels(key) {
   const r = await fetch(`${API}/models?pageSize=200`, { headers: { 'x-goog-api-key': key } });
   const j = await r.json();
   if (!r.ok) throw new Error(`ListModels ${r.status}: ${j.error?.message || 'failed'}`);
-  return (j.models || [])
-    .filter((m) => m.supportedGenerationMethods?.includes('generateContent') && /flash/.test(m.name) && !/(lite|image|tts|live|audio|thinking-exp|preview-tts)/.test(m.name))
+  const names = (j.models || [])
+    .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
     .map((m) => m.name.replace('models/', ''))
-    .sort()
-    .reverse();
+    .filter((n) => /flash/.test(n) && !/(image|tts|live|audio|embedding|omni|exp)/.test(n));
+  // Prefer the stable alias, then plain "gemini-X.Y-flash" (newest first), then "-lite", then anything else.
+  const ver = (n) => parseFloat((n.match(/gemini-(\d+(?:\.\d+)?)/) || [0, 0])[1]);
+  const rank = (n) => (n === 'gemini-flash-latest' ? 0 : /^gemini-\d+(\.\d+)?-flash$/.test(n) ? 1 : /^gemini-\d+(\.\d+)?-flash-lite$/.test(n) ? 2 : 3);
+  return names.sort((a, b) => rank(a) - rank(b) || ver(b) - ver(a));
 }
 
 async function generate(key, model, image, mime) {
@@ -78,7 +81,7 @@ export default async function handler(req, res) {
     if (!key) return res.status(200).json({ ok: false, problem: 'GEMINI_API_KEY is not set in Vercel (Settings → Environment Variables), then redeploy.' });
     try {
       const models = await listFlashModels(key);
-      return res.status(200).json({ ok: true, configuredModel: process.env.GEMINI_MODEL || 'gemini-2.5-flash', availableFlashModels: models.slice(0, 8) });
+      return res.status(200).json({ ok: true, configuredModel: process.env.GEMINI_MODEL || 'gemini-flash-latest', availableFlashModels: models.slice(0, 8) });
     } catch (e) {
       return res.status(200).json({ ok: false, problem: String(e.message || e) });
     }
@@ -90,19 +93,21 @@ export default async function handler(req, res) {
   if (!image) return res.status(400).json({ error: 'No image received' });
 
   try {
-    let model = cachedModel || process.env.GEMINI_MODEL || 'gemini-2.5-flash';
-    let r = await generate(key, model, image, mime);
-    let j = await r.json().catch(() => ({}));
-
-    // Model renamed / retired → pick a current flash model automatically and retry once.
-    if (r.status === 404 || /not found|not supported/i.test(j.error?.message || '')) {
-      const models = await listFlashModels(key);
-      if (!models.length) throw new Error('No Gemini flash model available for this key');
-      model = models[0];
+    // Try the working/configured model first; if it's retired (404) or has no free quota (429),
+    // fall back through other current flash models.
+    const first = cachedModel || process.env.GEMINI_MODEL || 'gemini-flash-latest';
+    let candidates = [first];
+    let model, r, j, tried = [];
+    for (let i = 0; i < 5 && i < candidates.length; i++) {
+      model = candidates[i];
+      tried.push(model);
       r = await generate(key, model, image, mime);
       j = await r.json().catch(() => ({}));
+      const retry = r.status === 404 || r.status === 429 || /not found|not supported/i.test(j.error?.message || '');
+      if (!retry) break;
+      if (candidates.length === 1) candidates = [first, ...(await listFlashModels(key)).filter((m) => m !== first)];
     }
-    if (!r.ok) return res.status(502).json({ error: `Gemini ${r.status}: ${j.error?.message || 'error'}`, model });
+    if (!r.ok) return res.status(502).json({ error: `Gemini ${r.status}: ${(j.error?.message || 'error').slice(0, 300)}`, tried });
     cachedModel = model;
 
     const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text || '').join('') || '';
