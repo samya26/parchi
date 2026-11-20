@@ -128,7 +128,7 @@ export default async function handler(req, res) {
       model = candidates[i];
       tried.push(model);
       ({ r, j } = await generate(key, model, image, mime, BUDGET - (Date.now() - t0)));
-      const retry = r.status === 404 || r.status === 429 || /not found|not supported/i.test(j.error?.message || '');
+      const retry = [404, 429, 500, 503, 504].includes(r.status) || /not found|not supported/i.test(j.error?.message || '');
       if (!retry) break;
       if (i === candidates.length - 1 && !candidates.listed) { const more = (await listFlashModels(key)).filter((m) => !candidates.includes(m)); candidates = [...candidates, ...more]; candidates.listed = true; }
     }
