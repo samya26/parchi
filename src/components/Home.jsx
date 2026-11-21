@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { shrink } from '../lib/read.js';
+import { shrink, unlock, getCode } from '../lib/read.js';
 import { useReveal } from '../lib/reveal.js';
 
 const BASE = import.meta.env.BASE_URL;
@@ -25,9 +25,54 @@ function Decoder() {
   );
 }
 
+// Real scanning is locked behind an access code + an "I understand" step (portfolio demo, not a medical tool).
+function UnlockSheet({ what, onClose, onPick, onManual }) {
+  const [code, setCode] = useState('');
+  const [agree, setAgree] = useState(false);
+  const [state, setState] = useState('idle');
+  const submit = async (e) => {
+    e.preventDefault();
+    setState('checking');
+    try { if (await unlock(code)) { what === 'type' ? onManual() : setState('ok'); } else setState('wrong'); } catch (err) { setState('wrong'); }
+  };
+  if (state === 'ok') {
+    // iPhones only open the camera from a direct tap, so the last step is a real button.
+    return (
+      <div className="sheet-bg" onClick={onClose}>
+        <div className="sheet" onClick={(e) => e.stopPropagation()}>
+          <b className="sheet-title">Unlocked ✓</b>
+          <p>Tip: hold the phone flat above the page, no flash, and fill the screen with the handwriting.</p>
+          <button className="primary big" onClick={onPick}>📷 Choose a photo</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="sheet-bg" onClick={onClose}>
+      <form className="sheet" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
+        <b className="sheet-title">Scan your own prescription</b>
+        <p>Parchi is a <b>student portfolio demo</b>, so real scanning is limited to people with an access code. Everyone can try the samples.</p>
+        <label className="fld"><span>Access code</span><input value={code} onChange={(e) => { setCode(e.target.value); setState('idle'); }} placeholder="e.g. word-word-1234" autoCapitalize="none" autoCorrect="off" /></label>
+        {state === 'wrong' && <p className="hint warn">That code didn't work.</p>}
+        <label className="agree">
+          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+          <span>I understand Parchi can misread handwriting and is <b>not medical advice</b>. I'll follow my doctor and pharmacist. My photo is sent to Google Gemini to be read, so I'll cover personal details.</span>
+        </label>
+        <div className="sheet-btns">
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          <button className="primary" disabled={!code.trim() || !agree || state === 'checking'}>{state === 'checking' ? 'Checking…' : 'Continue'}</button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 export default function Home({ onImage, onManual }) {
   const input = useRef();
   const [samples, setSamples] = useState([]);
+  const [sheet, setSheet] = useState(null); // 'scan' | 'type'
+  const unlocked = !!getCode();
+  const want = (what) => (unlocked ? (what === 'scan' ? input.current.click() : onManual()) : setSheet(what));
   useEffect(() => { fetch(BASE + 'samples/samples.json').then((r) => r.json()).then(setSamples).catch(() => {}); }, []);
   useReveal([samples.length]);
 
@@ -40,27 +85,28 @@ export default function Home({ onImage, onManual }) {
     <section className="home">
       <div className="hero">
         <h1 className="rv">Can't read your <em>prescription?</em></h1>
-        <p className="lede rv">Snap it. Parchi explains every medicine in plain words.</p>
+        <p className="lede rv">Parchi turns a doctor's scribbles into a plain-words plan.</p>
       </div>
 
       <Decoder />
 
-      <button className="scan-btn rv" onClick={() => input.current.click()}>
-        <span className="cam">📷</span>
-        <span><b>Scan a prescription</b><small>Photo or upload</small></span>
-        <span className="go">→</span>
-      </button>
-      <input ref={input} type="file" accept="image/*" capture="environment" hidden onChange={pick} />
-
-      <div className="row-head rv"><span>Try a sample</span><button className="link-btn" onClick={onManual}>or type names</button></div>
+      <div className="row-head rv"><span>Try a sample</span><small>swipe →</small></div>
       <div className="hscroll stagger">
         {samples.map((s) => (
           <button key={s.id} className="sample rv" onClick={() => onImage(BASE + s.image, s.reading)}>
             <img src={BASE + s.image} alt="" />
-            <span>{s.title}<small>{s.reading.medicines.length} medicines</small></span>
+            <span>{s.title}<small>{s.reading.medicines.length} medicines · tap to try</small></span>
           </button>
         ))}
       </div>
+
+      <button className="scan-btn rv" onClick={() => want('scan')}>
+        <span className="cam">{unlocked ? '📷' : '🔒'}</span>
+        <span><b>Scan your own</b><small>{unlocked ? 'Photo or upload' : 'Needs a demo access code'}</small></span>
+        <span className="go">→</span>
+      </button>
+      <input ref={input} type="file" accept="image/*" capture="environment" hidden onChange={pick} />
+      <button className="link-btn center rv" onClick={() => want('type')}>or type medicine names</button>
 
       <div className="row-head rv"><span>What you get</span></div>
       <div className="hscroll stagger feats">
@@ -69,6 +115,7 @@ export default function Home({ onImage, onManual }) {
         <div className="feat rv"><i>⏰</i><b>Reminders</b><p>For the whole course.</p></div>
         <div className="feat rv"><i>💸</i><b>Save money</b><p>Same salt, cheaper brand.</p></div>
       </div>
+      {sheet && <UnlockSheet what={sheet} onClose={() => setSheet(null)} onPick={() => { input.current.click(); setSheet(null); }} onManual={onManual} />}
     </section>
   );
 }

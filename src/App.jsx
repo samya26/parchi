@@ -45,6 +45,7 @@ export default function App() {
           </div>
         )}
       </header>
+      <div className="demo-strip">Student portfolio demo · not for medical use</div>
 
       <main key={step} className="page">
         {step === 'home' && (
@@ -67,7 +68,7 @@ export default function App() {
       </main>
 
       <footer className="foot">
-        Not medical advice — confirm with your doctor or pharmacist.
+        Parchi is a student portfolio project, not a medical product. It can make mistakes — always follow your doctor and pharmacist.
       </footer>
     </div>
   );

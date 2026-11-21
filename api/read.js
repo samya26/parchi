@@ -2,7 +2,19 @@
 // Set GEMINI_API_KEY in Vercel → Project → Settings → Environment Variables.
 // Optional: GEMINI_MODEL. If the model isn't available, we automatically pick a current "flash" model.
 // Health check: open /api/read in a browser (GET) to see if the key and model work.
+import { createHash, timingSafeEqual } from 'node:crypto';
 export const config = { maxDuration: 60 };
+
+// Portfolio demo: scanning real prescriptions needs an access code (shared only with recruiters).
+// Set DEMO_ACCESS_CODE in Vercel to change it; otherwise this hash of the default code is used.
+const DEFAULT_CODE_HASH = '2679a114fe970045a4997b43ff9045c616709f37515da7c665f48fce96ff41b9';
+const sha = (s) => createHash('sha256').update(String(s).trim().toLowerCase()).digest();
+function codeOk(code) {
+  if (!code) return false;
+  const want = process.env.DEMO_ACCESS_CODE ? sha(process.env.DEMO_ACCESS_CODE) : Buffer.from(DEFAULT_CODE_HASH, 'hex');
+  const got = sha(code);
+  return got.length === want.length && timingSafeEqual(got, want);
+}
 
 const API = 'https://generativelanguage.googleapis.com/v1beta';
 
@@ -99,6 +111,9 @@ function parseJSON(text) {
 export default async function handler(req, res) {
   const key = process.env.GEMINI_API_KEY;
 
+  if (req.method === 'GET' && req.query && 'code' in req.query) {
+    return res.status(200).json({ valid: codeOk(req.query.code) });
+  }
   if (req.method === 'GET') {
     if (!key) return res.status(200).json({ ok: false, problem: 'GEMINI_API_KEY is not set in Vercel (Settings → Environment Variables), then redeploy.' });
     try {
@@ -111,7 +126,8 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
   if (!key) return res.status(500).json({ error: 'Server is missing GEMINI_API_KEY (add it in Vercel settings, then redeploy).' });
 
-  const { image, mime, hint } = req.body || {};
+  const { image, mime, hint, code } = req.body || {};
+  if (!codeOk(code)) return res.status(401).json({ error: 'This is a portfolio demo — scanning needs an access code.' });
   if (!image) return res.status(400).json({ error: 'No image received' });
 
   try {

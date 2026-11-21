@@ -1,5 +1,7 @@
 # Parchi — your prescription, explained
 
+> **Student portfolio demo — not a medical product.** Anyone can try the fictional sample prescriptions. Scanning real prescriptions is limited to people with a demo access code, after an "I understand" step, because a misread dose could cause harm and photos are processed by Google Gemini. Set `DEMO_ACCESS_CODE` in Vercel to change the code.
+
 Scan a (handwritten) prescription → Parchi reads it with AI → you confirm each medicine next to the original handwriting → you get a plain-language daily plan, calendar reminders for the whole course, and cheaper medicines with the exact same salt, strength and form.
 
 ## How it works
