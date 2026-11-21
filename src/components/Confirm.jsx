@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { searchMedicine, getProduct } from '../lib/meds.js';
 import { decodeDosage, plainLanguage } from '../lib/dosage.js';
-import { useReveal } from '../lib/reveal.js';
 
 let uid = 0;
 const fromReading = (m) => ({
@@ -74,7 +73,7 @@ function MedCard({ med, image, onChange, onRemove }) {
   const title = med.product?.name || med.query || 'New medicine';
 
   return (
-    <article className={`med rv ${problems.length ? 'attn' : 'fine'}`}>
+    <article className={`med ${problems.length ? 'attn' : 'fine'}`}>
       <Crop image={image} box={med.box} />
 
       {!open ? (
@@ -139,7 +138,6 @@ export default function Confirm({ image, reading, onDone, onBack }) {
   const update = (m) => setMeds((all) => all.map((x) => (x.id === m.id ? m : x)));
   const loading = meds.some((m) => m.candidates === null);
   const flagged = meds.filter((m) => issues(m).length && !m.edited).length;
-  useReveal([meds.length]);
 
   return (
     <section className="confirm">

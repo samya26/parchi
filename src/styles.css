@@ -20,6 +20,8 @@ a { -webkit-tap-highlight-color: transparent; }
 .hscroll .rv[data-in] { transform: none; }
 .page { animation: pageIn .45s cubic-bezier(.2,.7,.2,1); }
 @keyframes pageIn { from { opacity: 0; transform: translateY(10px); } }
+@keyframes cardIn { from { opacity: 0; transform: translateY(14px); } }
+.med:nth-of-type(2) { animation-delay: .06s; } .med:nth-of-type(3) { animation-delay: .12s; } .med:nth-of-type(4) { animation-delay: .18s; } .med:nth-of-type(5) { animation-delay: .24s; } .med:nth-of-type(n+6) { animation-delay: .3s; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .rv { opacity: 1; transform: none; } }
 
 /* ---------- header ---------- */
@@ -97,7 +99,7 @@ h1 em { color: var(--green); }
 .detail { font-family: ui-monospace, monospace; font-size: 12px; color: var(--ink2); word-break: break-word; }
 
 /* ---------- confirm ---------- */
-.med { background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+.med { animation: cardIn .5s cubic-bezier(.2,.7,.2,1) both; background: var(--card); border: 1.5px solid var(--line); border-radius: var(--r); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
 .med.attn { border-color: var(--saffron); box-shadow: 0 0 0 3px var(--saffron-bg); }
 .crop { background: #f1ece2; border-radius: 14px; padding: 6px; margin-bottom: 12px; }
 .crop span { display: none; }
